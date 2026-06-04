@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal File Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex items-center justify-center p-6">
+
+    <div class="max-w-xl w-full bg-slate-800 rounded-2xl shadow-2xl p-8 border border-slate-700">
+        <h1 class="text-3xl font-extrabold text-center mb-2 bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+            File Converter
+        </h1>
+        <p class="text-slate-400 text-center text-sm mb-6">Secure, private ad-free file conversions. Deleted automatically after 30 mins.</p>
+
+        <div id="drop-zone" class="border-2 border-dashed border-slate-600 hover:border-blue-400 rounded-xl p-8 text-center cursor-pointer transition-all bg-slate-850 mb-6">
+            <input type="file" id="file-input" class="hidden" accept="image/png, image/jpeg, application/pdf, application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+            <p id="drop-zone-text" class="text-slate-300 font-medium">Drag & drop your file here, or <span class="text-blue-400 font-semibold">browse</span></p>
+            <p class="text-xs text-slate-500 mt-2">Supports JPG, PNG, PDF, and DOCX up to 10MB</p>
+        </div>
+
+        <div id="config-zone" class="hidden space-y-4 mb-6">
+            <div class="flex items-center justify-between bg-slate-700 p-3 rounded-lg text-sm">
+                <span id="file-details" class="truncate font-mono text-slate-300 max-w-[70%]">filename.jpg</span>
+                <span class="text-xs bg-blue-500/20 text-blue-400 px-2 py-1 rounded font-bold">READY</span>
+            </div>
+            
+            <div>
+                <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Convert To:</label>
+                <select id="target-format" class="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-400">
+                    </select>
+            </div>
+
+            <button id="convert-btn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all shadow-lg shadow-blue-500/20">
+                Convert File
+            </button>
+        </div>
+
+        <div id="status-zone" class="hidden space-y-3">
+            <div class="flex justify-between items-center text-sm">
+                <span id="status-text" class="text-blue-400 font-medium">Processing request...</span>
+                <span id="status-percent" class="text-slate-400 text-xs">Processing...</span>
+            </div>
+            <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden">
+                <div id="status-bar" class="bg-blue-400 h-full w-1/4 transition-all duration-300"></div>
+            </div>
+            <a id="download-link" href="#" download class="hidden w-full text-center bg-emerald-500 hover:bg-emerald-600 text-white font-semibold py-3 px-4 rounded-lg transition-all block shadow-lg shadow-emerald-500/20">
+                Download Converted File
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const configZone = document.getElementById('config-zone');
+        const fileDetails = document.getElementById('file-details');
+        const convertBtn = document.getElementById('convert-btn');
+        const targetFormatSelect = document.getElementById('target-format');
+        const statusZone = document.getElementById('status-zone');
+        const statusBar = document.getElementById('status-bar');
+        const statusText = document.getElementById('status-text');
+        const statusPercent = document.getElementById('status-percent');
+        const downloadLink = document.getElementById('download-link');
+
+        let selectedFile = null;
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', (e) => handleFileSelection(e.target.files[0]));
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('border-blue-400'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('border-blue-400'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-400');
+            if(e.dataTransfer.files.length) handleFileSelection(e.dataTransfer.files[0]);
+        });
+
+        function handleFileSelection(file) {
+            if(!file) return;
+            selectedFile = file;
+            fileDetails.textContent = `${file.name} (${(file.size / (1024 * 1024)).toFixed(2)} MB)`;
+            
+            const ext = file.name.split('.').pop().toLowerCase();
+            
+            // Adapt options dynamically based on selection rules
+            targetFormatSelect.innerHTML = '';
+            if (['jpg', 'jpeg', 'png'].includes(ext)) {
+                targetFormatSelect.innerHTML = `
+                    <option value="png">PNG (.png)</option>
+                    <option value="jpeg">JPG / JPEG (.jpg)</option>
+                `;
+            } else if (['pdf', 'docx'].includes(ext)) {
+                targetFormatSelect.innerHTML = `
+                    <option value="txt">Plain Text (.txt)</option>
+                `;
+            }
+
+            configZone.classList.remove('hidden');
+            statusZone.classList.add('hidden');
+            downloadLink.classList.add('hidden');
+        }
+
+        convertBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('targetFormat', targetFormatSelect.value);
+
+            configZone.classList.add('hidden');
+            statusZone.classList.remove('hidden');
+            statusText.textContent = "Processing and translating asset files...";
+            statusBar.style.width = "50%";
+
+            try {
+                const response = await fetch('/api/convert', { method: 'POST', body: formData });
+                const data = await response.json();
+
+                if (data.success) {
+                    statusBar.style.width = "100%";
+                    statusText.textContent = "Conversion successfully processed!";
+                    statusPercent.textContent = "100%";
+                    downloadLink.href = data.downloadUrl;
+                    downloadLink.classList.remove('hidden');
+                } else {
+                    alert('Error running conversion: ' + data.error);
+                    resetUI();
+                }
+            } catch (err) {
+                alert('A server processing failure occurred.');
+                resetUI();
+            }
+        });
+
+        function resetUI() {
+            configZone.classList.add('hidden');
+            statusZone.classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
